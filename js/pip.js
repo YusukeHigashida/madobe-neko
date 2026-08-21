@@ -99,6 +99,16 @@ function restoreFromPip(){
   poke();
 }
 
+// ページが捨てられるときは小窓も閉じる。
+// 開いたまま残ると、中身が動かない窓と、音だけ鳴り続けるページが残ってしまう。
+window.addEventListener('pagehide', (e) => {
+  if (e.persisted || !pipWin) return;
+  const win = pipWin;
+  pipWin = null;                                     // これから閉じるので復帰処理は要らない
+  win.removeEventListener('pagehide', restoreFromPip);
+  try { win.close(); } catch (err){ /* もう閉じている */ }
+});
+
 if (pipBtn){
   pipBtn.addEventListener('click', openPip);
   updatePipBtn();

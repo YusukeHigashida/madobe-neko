@@ -56,6 +56,14 @@ CSS も別ウィンドウには自動で付いてこないので、`pip.js` の 
 そのため `main.js` のループは rAF の引数を使わず、常に `performance.now()` で測っている。
 `state.lastPet` や `cat.until` もこの時計で記録しているので、時刻を扱うときは揃えること。
 
+小窓が開いているあいだ、元のページは生きたまま残る。ブラウザの窓を閉じても
+ページだけ生き残ることがあり、**音を止めていないと BGM が鳴り続ける**。
+ホワイトノイズ・ゴロゴロ・LFO は起動時に `start()` したら止めない作りで、
+BGM も `setInterval` で鳴り続けるので、`AudioContext` を閉じない限り音は消えない。
+そこで `audio.js` の `shutdownAudio()` を `pagehide` で呼び、タイマーを止めて
+`AudioContext` を閉じている。`pip.js` も同じ `pagehide` で小窓を閉じる。
+どちらも `event.persisted`（＝「戻る」で復帰しうる状態）のときは何もしない。
+
 ## 素材について
 
 天気データは [Open-Meteo](https://open-meteo.com/)（CC BY 4.0）。

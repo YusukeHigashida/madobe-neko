@@ -3,6 +3,7 @@
    音（すべてコード生成。素材ファイル不要）
    ============================================================ */
 let AC = null, master = null, nodes = {};
+let bgmTimer = 0, ambientTimer = 0;   // ページを閉じるとき止めるので、id を持っておく
 function initAudio(){
   if (AC) return;
   const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -78,7 +79,7 @@ function initBgm(){
   tone.connect(rev); rev.connect(wet); wet.connect(out);
   out.connect(master);
   bgm = { out, tone, nextChord: 0, nextNote: 0, chordIdx: 0, mood: BGM_MOODS[1], voices: [] };
-  setInterval(bgmTick, 90);
+  bgmTimer = setInterval(bgmTick, 90);
 }
 
 // 今の時間帯と天気から、演奏のパラメータを決める
@@ -215,9 +216,9 @@ function scheduleAmbient(){
       }
       if (n > .6 && Math.random() < .6) cricket();
     }
-    setTimeout(tick, rand(1400, 4200));
+    ambientTimer = setTimeout(tick, rand(1400, 4200));
   };
-  setTimeout(tick, 1200);
+  ambientTimer = setTimeout(tick, 1200);
 }
 
 /* ------------------------------------------------------------
@@ -313,6 +314,26 @@ function approachGain(param, target, max, k){
   const step = Math.max(0, Math.min(1, k));
   param.value = Math.max(0, Math.min(max, param.value + (target - param.value) * step));
 }
+
+/* ------------------------------------------------------------
+   後片付け
+   ホワイトノイズ・ゴロゴロ・LFO は起動時に start したら止めない作りなので、
+   AudioContext を閉じない限り鳴り続ける。BGM も setInterval で鳴り続ける。
+   小窓（PiP）を開いたままブラウザの窓を閉じると元のページだけ生き残ることが
+   あり、そうなると窓が無いのに音だけ残る。ページが捨てられるときに自分で止める。
+   ------------------------------------------------------------ */
+function shutdownAudio(){
+  clearInterval(bgmTimer);  bgmTimer = 0;
+  clearTimeout(ambientTimer); ambientTimer = 0;
+  if (!AC) return;
+  const ac = AC;
+  AC = null;                       // 以降 updateAudio / meow / chirp は何もしない
+  master = null; nodes = {}; bgm = null;
+  ac.close().catch(() => {});      // 発振器も予約済みの音符もまとめて消える
+}
+
+// persisted は「戻るで復帰しうる（bfcache 入り）」の意味。そのときは残す。
+window.addEventListener('pagehide', (e) => { if (!e.persisted) shutdownAudio(); });
 
 function updateAudio(dt){
   if (!AC || !master) return;
