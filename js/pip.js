@@ -9,6 +9,7 @@ let pipWin = null;
 let pipNote = null;
 let pipOnTop = false;              // 最前面固定の小窓で開けているか
 let pipFallbackReason = '';
+let backToWindow = false;          // アプリの ⤢ ボタンで元に戻す途中か（小窓の × と見分けるための印）
 let rafHost = window;              // アニメーションを回す窓（小窓側で回さないと裏に回ったとき止まる）
 
 function pipSupported(){ return 'documentPictureInPicture' in window; }
@@ -19,7 +20,7 @@ function updatePipBtn(){
   pipBtn.classList.toggle('on', !!pipWin);
   pipBtn.title = pipWin
     ? (pipOnTop
-        ? '最前面の小窓で表示中（クリックで元に戻す）'
+        ? '最前面の小窓で表示中（クリックで元のウィンドウへ戻る／小窓の × で終了）'
         : '別ウィンドウで表示中。最前面固定は使えませんでした（' + pipFallbackReason + '）')
     : 'デスクトップの最前面に小窓で表示する';
 }
@@ -51,12 +52,12 @@ function moveInto(win, alwaysOnTop){
   win.addEventListener('resize', resize);
   win.addEventListener('keydown', onKey);
   win.addEventListener('pointermove', poke);
-  win.addEventListener('pagehide', restoreFromPip, { once: true });
+  win.addEventListener('pagehide', onPipClosed, { once: true });
   updatePipBtn();
 }
 
 async function openPip(){
-  if (pipWin){ pipWin.close(); return; }
+  if (pipWin){ backToWindow = true; pipWin.close(); return; }   // ⤢ ＝ 元のウィンドウへ戻る
   const r = stage.getBoundingClientRect();
   const w = Math.max(320, Math.min(720, Math.round(r.width * .6)));
   const h = Math.round(w / 1.5);
@@ -64,7 +65,13 @@ async function openPip(){
   // ① 本命：常に最前面に出る小窓（Chrome / Edge 116+）
   if (pipSupported()){
     try{
-      moveInto(await documentPictureInPicture.requestWindow({ width: w, height: h }), true);
+      moveInto(await documentPictureInPicture.requestWindow({
+        width: w, height: h,
+        // Chrome の「タブに戻る」ボタンを消す。アプリの ⤢ ボタンと役目が重なるうえ、
+        // 押されたボタンを知る API が無いので × と見分けられない。
+        // 消しておけば × は「まるごと終了」に専念できる。
+        disallowReturnToOpener: true,
+      }), true);
       return;
     } catch (err){
       pipFallbackReason = (err && err.message) || String(err);
@@ -99,13 +106,31 @@ function restoreFromPip(){
   poke();
 }
 
+/* 小窓が閉じられたとき。
+   ・アプリの ⤢ ボタン → 元のウィンドウへ戻す
+   ・小窓の ×        → 元のウィンドウごと終了する
+   どのボタンが押されたかを知る API は無いので、⤢ のときだけ backToWindow に
+   印を付けて見分けている。 */
+function onPipClosed(){
+  if (backToWindow){
+    backToWindow = false;
+    restoreFromPip();
+    return;
+  }
+  pipWin = null;
+  window.close();
+  // 閉じられない窓もある（script が開いた窓か、履歴が1件のタブだけが閉じられる）。
+  // 閉じられなかったら元のウィンドウへ戻して、中身が宙に浮いたままにしない。
+  setTimeout(() => { if (!window.closed) restoreFromPip(); }, 200);
+}
+
 // ページが捨てられるときは小窓も閉じる。
 // 開いたまま残ると、中身が動かない窓と、音だけ鳴り続けるページが残ってしまう。
 window.addEventListener('pagehide', (e) => {
   if (e.persisted || !pipWin) return;
   const win = pipWin;
   pipWin = null;                                     // これから閉じるので復帰処理は要らない
-  win.removeEventListener('pagehide', restoreFromPip);
+  win.removeEventListener('pagehide', onPipClosed);
   try { win.close(); } catch (err){ /* もう閉じている */ }
 });
 
