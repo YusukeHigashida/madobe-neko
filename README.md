@@ -3,6 +3,12 @@
 窓辺の猫を眺めるだけの箱庭アプリ。ビルド不要・外部ライブラリなし。
 `index.html` をブラウザで開けば動く（`file://` でも可）。
 
+公開先: <https://yusukehigashida.github.io/madobe-neko/>
+
+`main` に push すると GitHub Pages が自動で作り直す（設定は「Deploy from a branch / main / `/`」）。
+ビルド工程は無いので、リポジトリの中身がそのまま配信される。
+Jekyll に余計な処理をさせないために空の `.nojekyll` を置いている。
+
 ## フォルダ構成
 
 ```
