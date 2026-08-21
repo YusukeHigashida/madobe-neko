@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>まどべの猫 ― お天気タイムラプス</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+
+    <!-- 1. 背景 -->
+    <img class="bg" data-bg="night"   alt="">
+    <img class="bg" data-bg="morning" alt="">
+    <img class="bg" data-bg="day"     alt="">
+    <img class="bg" data-bg="sunset"  alt="">
+
+    <!-- 3. 猫 -->
+    <div id="catWrap">
+      <div class="cat-inner">
+        <div class="cat-shadow"></div>
+        <div class="cat-art" id="catArt">
+          <!-- 座り姿：しっぽ・耳・目を別レイヤーにして動かす -->
+          <div class="pose show" id="poseSit">
+            <div class="ear-hole"><img class="cat-img cat-body" id="catBody" alt="窓辺の猫"></div>
+            <img class="cat-img cat-tail" id="catTail" alt="">
+            <img class="cat-img cat-ear"  id="catEar"  alt="">
+            <div class="cat-eye" id="catEye"><div class="fur"></div><div class="lid"></div></div>
+          </div>
+          <!-- 伸び / 香箱 / 寝る / 歩く：スプライトシートから1コマ切り出す -->
+          <div class="pose" id="poseSprite"><img id="spriteImg" alt=""></div>
+        </div>
+        <div class="cat-hit" id="catHit"></div>
+      </div>
+    </div>
+
+    <!-- 4. 天気 -->
+    <canvas id="fx"></canvas>
+
+    <!-- 2. 色オーバーレイ群 -->
+    <div class="overlay" id="weatherTint"></div>
+    <div class="overlay" id="tintMul"></div>
+    <div class="overlay" id="tintScreen"></div>
+    <div class="overlay" id="sunbeam"></div>
+    <div class="overlay" id="lamp"></div>
+    <div class="overlay" id="vignette"></div>
+
+    <!-- エフェクト -->
+    <div id="fxDom"></div>
+
+    <div id="title">まどべの猫</div>
+    <!-- 天気データは Open-Meteo（CC BY 4.0）。ライセンス上、表示は必須なので消さないこと。 -->
+    <a id="credit" href="https://open-meteo.com/" target="_blank" rel="noopener"
+       title="天気データの出典：Open-Meteo.com（CC BY 4.0）">Weather data by Open-Meteo.com</a>
+    <div id="hint">そっとなでてみて…</div>
+
+    <!-- 5. UI（小窓モードではアイコンだけの1行に縮む） -->
+    <div id="uiZone"></div>
+    <div id="ui">
+      <button class="btn" id="playBtn" title="時間の再生 / 一時停止"><i>▶</i><span class="lbl">再生</span></button>
+      <div id="clock"><b>12:00</b><span>ひる</span></div>
+      <input type="range" id="timeSlider" min="0" max="1439" step="1" value="720" aria-label="時間">
+      <button class="btn" id="nowBtn" title="東京の現在時刻に戻す"><i>🕒</i><span class="lbl">いま</span></button>
+      <div class="sep"></div>
+      <div class="group" id="weatherGroup">
+        <button class="btn on" data-w="clear"><i>☀</i><span class="lbl">晴れ</span></button>
+        <button class="btn"    data-w="rain"><i>☂</i><span class="lbl">雨</span></button>
+        <button class="btn"    data-w="snow"><i>❄</i><span class="lbl">雪</span></button>
+      </div>
+      <button class="btn" id="liveBtn" title="実際の天気に合わせる"><i>🗼</i><span class="lbl">東京</span></button>
+      <div class="sep"></div>
+      <button class="btn" id="soundBtn" title="BGMと環境音のオン / オフ"><i>🔇</i><span class="lbl">音</span></button>
+      <button class="btn" id="pipBtn" title="デスクトップの最前面に小窓で表示する"><i>🪟</i><span class="lbl">小窓</span></button>
+    </div>
+
+  </div>
+</div>
+
+<!-- スクリプトは「ふつうの <script>」を順番に読む。
+     ES モジュールにすると file:// で開けなくなるため、あえてモジュールにしていない。
+     読み込む順番に依存があるので、並べ替えるときは注意。 -->
+<script src="js/config.js"></script>      <!-- 設定・スプライト定義・BGM パラメータ・時間帯カラー -->
+<script src="js/state.js"></script>       <!-- 状態と共通ヘルパ -->
+<script src="js/assets.js"></script>      <!-- 画像素材の読み込み -->
+<script src="js/render.js"></script>      <!-- 時間 → 見た目 -->
+<script src="js/cat.js"></script>         <!-- 猫のふるまい -->
+<script src="js/weather-fx.js"></script>  <!-- 天気パーティクル -->
+<script src="js/pet.js"></script>         <!-- なでる -->
+<script src="js/audio.js"></script>       <!-- 音 -->
+<script src="js/ui.js"></script>          <!-- UI と実天気の同期 -->
+<script src="js/pip.js"></script>         <!-- 小窓（最前面） -->
+<script src="js/main.js"></script>        <!-- メインループと起動 -->
+</body>
+</html>

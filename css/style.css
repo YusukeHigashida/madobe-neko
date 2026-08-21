@@ -1,0 +1,519 @@
+/* ============================================================
+   まどべの猫 / Window Cat  ―  見た目（ビルド不要・外部ライブラリなし）
+   ここだけで色・レイアウト・アニメーションが決まる。挙動は js/ 側。
+   ============================================================ */
+
+:root{
+  --ui-wood:      #6b4a30;
+  --ui-wood-soft: rgba(78, 52, 34, .58);
+  --ui-cream:     #fdf4e5;
+  --ui-accent:    #e8a15c;
+  --radius:       999px;
+  font-family: "Hiragino Maru Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+}
+
+*{ box-sizing: border-box; }
+
+html, body{
+  margin: 0; padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 40%, #3b2b21 0%, #241a14 55%, #171010 100%);
+  color: var(--ui-cream);
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+}
+
+/* ---------- 画面全体 ---------- */
+#app{
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ステージ：3:2 を保ってレターボックス表示（デスクトップに小窓で置く前提の比率） */
+#stage{
+  position: relative;
+  width:  min(100vw, 150vh);
+  height: min(66.6667vw, 100vh);
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  isolation: isolate;              /* blend-mode をこの中に閉じ込める */
+  box-shadow: 0 30px 90px rgba(0,0,0,.55);
+  user-select: none;
+  cursor: default;
+}
+
+/* ---------- 1. 背景レイヤー ---------- */
+.bg{
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  /* 背景が 3:2 より横長のときに左右をどう切るか。
+     16:9 の bg-day-city2.png は「左を少し・右を額縁の分だけ」切って収める。
+     素材が 3:2 ちょうどなら全体が見えるので、この指定は無害。 */
+  object-position: 30.7% 50%;
+  z-index: 1;
+  opacity: 0;                 /* 実際の不透明度は時刻から毎フレーム計算する */
+  pointer-events: none;
+}
+
+/* ---------- 3. 猫レイヤー ---------- */
+/* 位置・幅・高さは姿勢ごとに JS が設定する（POSES 参照） */
+#catWrap{
+  position: absolute;
+  left: 38%;
+  bottom: 9.4%;
+  width: 42%;
+  z-index: 3;
+  transform-origin: 50% 92%;
+  animation: breathe 4.2s ease-in-out infinite;
+  will-change: transform;
+}
+#catWrap.sleepy{ animation-duration: 6.4s; }
+/* 歩いているあいだは呼吸の伸縮を止める（脚の動きと干渉するため） */
+#catWrap.walking{ animation: none; }
+
+.cat-inner{
+  position: relative;
+  width: 100%;
+  transform-origin: 50% 92%;
+  animation: sway 9s ease-in-out infinite;
+}
+#catWrap.walking .cat-inner{ animation: none; }
+
+/* 絵の部分だけをまとめて、やわらかい落ち影を付ける
+   （猫が明るい空に溶けてしまうのを防ぎ、窓台に座っている感じを出す）
+   padding-top で「今の姿勢のコマの縦横比」の箱を作り、中身は全部その中に絶対配置する */
+.cat-art{
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-top: 66.667%;           /* JS が姿勢ごとに書き換える */
+  filter: drop-shadow(3px 7px 7px rgba(96, 62, 32, .26));
+}
+
+/* 進行方向が右のときは左右反転（この猫は模様が無いので反転しても違和感が出ない） */
+.cat-art.flip{ transform: scaleX(-1); }
+
+/* ひとつの姿勢＝ひとつのレイヤー。
+   姿勢の切り替えは「重ねてフェード」だと二重写しになるので、
+   絵は即座に入れ替え、代わりに一瞬の伸縮で動き直したように見せる。 */
+.pose{
+  position: absolute; inset: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+.pose.show{ opacity: 1; }
+
+.cat-inner.posing{ animation: poseShift 420ms cubic-bezier(.3,.9,.4,1); }
+@keyframes poseShift{
+  0%  { transform: scale(1.03, .93) translateY(1.4%); }
+  45% { transform: scale(.99, 1.02) translateY(-.5%); }
+  100%{ transform: scale(1, 1) translateY(0); }
+}
+
+/* シートから1コマだけ見せる（％指定なので画面サイズに依らない） */
+.pose img{
+  position: absolute;
+  height: auto;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.cat-img{
+  display: block;
+  width: 100%; height: auto;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+/* 座り姿の各レイヤーはコマ＝画像全体なので、箱いっぱいに置く。
+   ★ .ear-hole は必ず inset:0 で「面積を持たせる」こと。
+     高さ0だとマスクの描画領域も0になり、本体の絵ごと消える。 */
+#poseSit .ear-hole{ position: absolute; inset: 0; }
+#poseSit .cat-img{ position: absolute; left: 0; top: 0; width: 100%; height: auto; }
+
+/* 本体：しっぽ部分と耳部分を「穴」にしておく（別レイヤーで揺らすため）
+   ※ ぼかした境界で切り、分身レイヤー側と足して 1 になるので継ぎ目が出ない */
+.ear-hole{
+  position: relative;
+  -webkit-mask-image: radial-gradient(ellipse 6.5% 9.5% at 30.5% 16.5%, transparent 0 48%, #000 100%);
+          mask-image: radial-gradient(ellipse 6.5% 9.5% at 30.5% 16.5%, transparent 0 48%, #000 100%);
+}
+.cat-body{
+  -webkit-mask-image: linear-gradient(to right, #000 0 60%, transparent 74%);
+          mask-image: linear-gradient(to right, #000 0 60%, transparent 74%);
+}
+
+/* しっぽレイヤー */
+.cat-tail{
+  position: absolute; inset: 0;
+  -webkit-mask-image: linear-gradient(to right, transparent 0 60%, #000 74%);
+          mask-image: linear-gradient(to right, transparent 0 60%, #000 74%);
+  transform-origin: 66% 71%;
+  animation: tailSway 5.6s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* 耳レイヤー（たまにピクッ） */
+.cat-ear{
+  position: absolute; inset: 0;
+  -webkit-mask-image: radial-gradient(ellipse 6.5% 9.5% at 30.5% 16.5%, #000 0 48%, transparent 100%);
+          mask-image: radial-gradient(ellipse 6.5% 9.5% at 30.5% 16.5%, #000 0 48%, transparent 100%);
+  transform-origin: 30.5% 25.5%;
+}
+.cat-ear.twitch{ animation: earTwitch 620ms ease-in-out; }
+
+/* 目を細める演出 */
+.cat-eye{
+  position: absolute;
+  left: 16.5%; top: 21.2%;
+  width: 5.4%; height: 6.6%;
+  opacity: var(--squint, 0);
+  transform: rotate(-7deg);
+  transition: opacity .45s ease;
+  pointer-events: none;
+}
+/* まぶた＝毛色のぼかしで目を上から覆い、下にほんの少し瞳を残す（＝細めた目） */
+.cat-eye .fur{
+  position: absolute;
+  left: -16%; right: -16%; top: -18%; height: 88%;
+  background: radial-gradient(120% 130% at 50% 30%,
+     rgba(250,232,205,1) 0%, rgba(248,228,198,.96) 62%, rgba(248,228,198,0) 100%);
+  filter: blur(1.4px);
+}
+.cat-eye .lid{
+  position: absolute;
+  left: 2%; right: 2%; top: 46%; height: 46%;
+  border-top: clamp(1.2px, .17vw, 4px) solid rgba(104, 66, 42, .82);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+
+/* 猫の足元のなじませ影 */
+.cat-shadow{
+  position: absolute;
+  left: 15%; right: 5%;
+  bottom: 5%;
+  height: 10%;
+  background: radial-gradient(closest-side, rgba(86,54,28,.42), rgba(86,54,28,0) 100%);
+  filter: blur(4px);
+  opacity: var(--shadow-a, .8);
+  transition: opacity .6s ease;
+}
+
+/* なでる判定エリア（透明部分でも拾えるよう、体に沿ったざっくり楕円） */
+.cat-hit{
+  position: absolute;
+  left: 8%; top: 6%; right: 8%; bottom: 10%;
+  border-radius: 44% 40% 40% 46%;
+  cursor: grab;
+  z-index: 2;
+}
+.cat-hit:active{ cursor: grabbing; }
+
+@keyframes breathe{
+  0%, 100%{ transform: scale(1, 1) translateY(0); }
+  50%     { transform: scale(1.008, 1.017) translateY(-.35%); }
+}
+@keyframes sway{
+  0%, 100%{ transform: rotate(-.55deg); }
+  50%     { transform: rotate(.55deg); }
+}
+@keyframes tailSway{
+  0%, 100%{ transform: rotate(-3deg); }
+  50%     { transform: rotate(3deg); }
+}
+@keyframes earTwitch{
+  0%  { transform: rotate(0deg); }
+  22% { transform: rotate(-6deg); }
+  46% { transform: rotate(3deg); }
+  70% { transform: rotate(-2deg); }
+  100%{ transform: rotate(0deg); }
+}
+
+/* なでたときのぷるっ */
+#catWrap.petted .cat-inner{ animation: wiggle 900ms ease-out; }
+@keyframes wiggle{
+  0%  { transform: rotate(0) translateY(0) scale(1); }
+  20% { transform: rotate(1.6deg) translateY(-1.2%) scale(1.012); }
+  45% { transform: rotate(-1.2deg) translateY(-.4%) scale(1.006); }
+  70% { transform: rotate(.7deg) translateY(-.1%) scale(1.002); }
+  100%{ transform: rotate(0) translateY(0) scale(1); }
+}
+
+/* ---------- 2 & 追加. 時間帯・天気のオーバーレイ ---------- */
+.overlay{ position: absolute; inset: 0; pointer-events: none; }
+
+#tintMul   { z-index: 5; mix-blend-mode: multiply; }
+#tintScreen{ z-index: 6; mix-blend-mode: screen; }
+#weatherTint{ z-index: 5; mix-blend-mode: multiply; transition: background-color 1.1s ease; }
+
+/* 窓から差す光（時間で角度と強さが変わる） */
+#sunbeam{
+  z-index: 6;
+  mix-blend-mode: screen;
+  background: linear-gradient(105deg,
+      rgba(255,226,160,0) 30%,
+      rgba(255,222,150,.55) 48%,
+      rgba(255,214,140,0) 66%);
+  filter: blur(28px);
+}
+
+/* 夜の室内のあたたかい灯り */
+#lamp{
+  z-index: 6;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(46% 42% at 58% 80%, rgba(255,198,124,.50) 0%, rgba(255,170,90,0) 72%),
+    radial-gradient(130% 78% at 50% 112%, rgba(255,182,102,.62) 0%, rgba(255,150,60,0) 72%),
+    radial-gradient(58% 54% at 96% 96%, rgba(255,178,88,.50) 0%, rgba(255,150,60,0) 70%),
+    radial-gradient(58% 54% at 3% 98%, rgba(255,170,84,.44) 0%, rgba(255,150,60,0) 72%);
+}
+
+/* 全体のなじませ（周辺減光） */
+#vignette{
+  z-index: 7;
+  background: radial-gradient(120% 100% at 50% 45%,
+     rgba(0,0,0,0) 45%, rgba(30,16,6,.20) 78%, rgba(24,12,4,.42) 100%);
+}
+
+/* ---------- 4. 天気レイヤー ---------- */
+#fx{
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* ---------- ハートなどのエフェクト ---------- */
+#fxDom{ position: absolute; inset: 0; z-index: 8; pointer-events: none; overflow: hidden; }
+.heart{
+  position: absolute;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+  animation: floatUp 2.1s cubic-bezier(.22,.7,.3,1) forwards;
+  text-shadow: 0 0 6px rgba(255,255,255,.85), 0 2px 5px rgba(150,70,60,.5);
+  filter: drop-shadow(0 2px 4px rgba(120,60,40,.3));
+}
+@keyframes floatUp{
+  0%  { opacity: 0; transform: translate(-50%,-50%) scale(.4) rotate(-8deg); }
+  18% { opacity: 1; transform: translate(-50%,-90%) scale(1.05) rotate(4deg); }
+  100%{ opacity: 0; transform: translate(-50%,-320%) scale(.85) rotate(-6deg); }
+}
+
+/* ---------- 5. UIレイヤー ---------- */
+#ui{
+  position: absolute;
+  left: 50%; bottom: 1.8%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex; align-items: center; gap: .5rem;
+  padding: .42rem .62rem;
+  max-width: 96%;
+  flex-wrap: nowrap; justify-content: center;
+  background: linear-gradient(180deg, rgba(92,63,42,.62), rgba(64,42,27,.7));
+  border: 1px solid rgba(255,229,190,.22);
+  border-radius: 1.1rem;
+  backdrop-filter: blur(9px) saturate(1.1);
+  -webkit-backdrop-filter: blur(9px) saturate(1.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,240,215,.16);
+  font-size: clamp(11px, 1.05vw, 14px);
+  opacity: .96;
+  transition: opacity .5s ease, transform .5s ease;
+}
+#stage.idle #ui{ opacity: .62; }
+#ui:hover{ opacity: 1; }
+
+/* 画面下端のホバー検知帯（小窓モードでのみ有効） */
+#uiZone{
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 15%;
+  z-index: 9;
+  pointer-events: none;
+}
+
+/* 小窓（最前面）モード
+   ・猫だけを見せる。操作は「下端にカーソルを寄せたとき」だけ出す
+     （猫をなでるつもりでUIが飛び出してこないように）
+   ・時計とスライダーは隠し、ボタンはアイコンだけの1行にする */
+#stage.pip #uiZone{ pointer-events: auto; }
+#stage.pip #ui{ opacity: 0; pointer-events: none; }
+#stage.pip #uiZone:hover ~ #ui,
+#stage.pip #ui:hover{ opacity: .96; pointer-events: auto; }
+#stage.pip #title{ opacity: 0; }
+#stage.pip #clock,
+#stage.pip #timeSlider,
+#stage.pip .sep,
+#stage.pip .lbl{ display: none; }
+#stage.pip #ui{ flex-wrap: nowrap; gap: .3rem; padding: .3rem .42rem; }
+
+.btn i{ font-style: normal; }
+.btn .lbl{ margin-left: .38em; }
+
+/* 小窓に出ているあいだ、元の画面に出す案内 */
+.pip-placeholder{
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  gap: .6em;
+  color: rgba(255,238,214,.6);
+  font-size: clamp(12px, 1.2vw, 15px);
+  letter-spacing: .08em;
+  text-align: center;
+  padding: 2rem;
+}
+
+.btn{
+  appearance: none;
+  border: 1px solid rgba(255,232,198,.2);
+  background: rgba(255,238,212,.09);
+  color: var(--ui-cream);
+  font: inherit;
+  padding: .42em .78em;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .2s ease, transform .12s ease, border-color .2s ease;
+  white-space: nowrap;
+}
+.btn:hover{ background: rgba(255,238,212,.2); }
+.btn:active{ transform: scale(.95); }
+.btn.on{
+  background: linear-gradient(180deg, rgba(255,203,138,.95), rgba(232,161,92,.95));
+  border-color: rgba(255,234,205,.6);
+  color: #4a2f1a;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(232,161,92,.35);
+}
+.group{
+  display: flex; gap: .28rem;
+  padding: .18rem;
+  background: rgba(40,25,16,.35);
+  border-radius: var(--radius);
+}
+.sep{ width: 1px; height: 1.6em; background: rgba(255,235,205,.18); }
+
+#clock{
+  min-width: 7.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  cursor: pointer;
+  position: relative;
+}
+/* 実時間に同期中は小さな灯をともす */
+#clock.live::before{
+  content: '';
+  position: absolute;
+  left: -.15em; top: 50%;
+  width: .42em; height: .42em;
+  margin-top: -.21em;
+  border-radius: 50%;
+  background: #7fe08a;
+  box-shadow: 0 0 .5em rgba(127,224,138,.9);
+  animation: livePulse 2.4s ease-in-out infinite;
+}
+@keyframes livePulse{ 0%,100%{ opacity:.5 } 50%{ opacity:1 } }
+#clock b{ font-size: 1.18em; margin-right: .35em; }
+#clock span{ opacity: .82; }
+
+#timeSlider{
+  appearance: none; -webkit-appearance: none;
+  width: clamp(70px, 14vw, 190px);
+  flex: 0 1 auto; min-width: 0;
+  height: 1.5em;
+  background: transparent;
+  cursor: pointer;
+}
+#timeSlider::-webkit-slider-runnable-track{
+  height: .42em; border-radius: var(--radius);
+  background: linear-gradient(90deg,
+     #1e2a52 0%, #4a3a6b 12%, #f0b183 24%, #bfe4f7 44%,
+     #ffd9a0 68%, #e88a5c 78%, #6a4a78 87%, #1e2a52 100%);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.4);
+}
+#timeSlider::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: 1.05em; height: 1.05em; margin-top: -.32em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff6e6, #f0c894);
+  border: 1px solid rgba(120,80,45,.6);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+#timeSlider::-moz-range-track{
+  height: .42em; border-radius: var(--radius);
+  background: linear-gradient(90deg,
+     #1e2a52 0%, #4a3a6b 12%, #f0b183 24%, #bfe4f7 44%,
+     #ffd9a0 68%, #e88a5c 78%, #6a4a78 87%, #1e2a52 100%);
+}
+#timeSlider::-moz-range-thumb{
+  width: 1em; height: 1em; border-radius: 50%; border: 1px solid rgba(120,80,45,.6);
+  background: radial-gradient(circle at 35% 30%, #fff6e6, #f0c894);
+}
+
+/* なでてね、のヒント */
+#hint{
+  position: absolute;
+  left: 61%; top: 44%;
+  transform: translate(-50%, -50%);
+  z-index: 9;
+  padding: .38em .85em;
+  border-radius: var(--radius);
+  background: rgba(58,38,24,.5);
+  border: 1px solid rgba(255,232,198,.22);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-size: clamp(11px, 1.05vw, 14px);
+  color: #fff3e0;
+  pointer-events: none;
+  animation: hintPulse 2.8s ease-in-out infinite;
+  transition: opacity .8s ease;
+}
+#hint.hide{ opacity: 0; }
+@keyframes hintPulse{
+  0%,100%{ transform: translate(-50%,-50%) scale(1); opacity: .9; }
+  50%    { transform: translate(-50%,-54%) scale(1.03); opacity: 1; }
+}
+
+/* タイトル（うっすら） */
+#title{
+  position: absolute; left: 2.2%; top: 3%;
+  z-index: 9;
+  font-size: clamp(12px, 1.3vw, 18px);
+  letter-spacing: .18em;
+  color: rgba(255,246,232,.82);
+  text-shadow: 0 2px 8px rgba(60,30,10,.55);
+  pointer-events: none;
+  opacity: .9;
+  transition: opacity .6s ease;
+}
+#stage.idle #title{ opacity: .55; }
+
+/* 出典表示（Open-Meteo / CC BY 4.0）
+   ライセンス上の必須表示。世界観を壊さないよう極力ひかえめにするが、消さないこと。
+   タイトルと対になる右上に置く（下部はUIバーと重なるため避けている）。 */
+#credit{
+  position: absolute; right: 2.2%; top: 3.2%;
+  z-index: 9;
+  font-size: clamp(8px, .72vw, 11px);
+  letter-spacing: .04em;
+  /* 色と影は時間帯に合わせて JS が直接書き換える（昼は濃い茶、夜は生成り） */
+  color: rgba(78,52,32,.44);
+  text-decoration: none;
+  text-shadow: 0 1px 2px rgba(255,250,240,.35);
+  transition: color .6s ease, text-shadow .6s ease;
+  white-space: nowrap;
+}
+#credit:hover{ text-decoration: underline; filter: contrast(1.6) saturate(0); }
+/* 小窓では隠し、マウスを載せたときだけ見える */
+#stage.pip #credit{ opacity: 0; transition: opacity .3s ease; }
+#stage.pip:hover #credit{ opacity: 1; }
+
+@media (max-width: 760px){
+  #ui{ gap: .35rem; padding: .4rem .5rem; flex-wrap: wrap; }
+  #clock{ min-width: 6.4em; }
+}
+@media (prefers-reduced-motion: reduce){
+  #catWrap, .cat-inner, .cat-tail{ animation: none !important; }
+}

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve.js", ".", "4321"],
+      "port": 4321
+    }
+  ],
+  "autoVerify": true
+}
