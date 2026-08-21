@@ -8,9 +8,16 @@ let loopToken = 0;
 function startLoop(){
   const mine = ++loopToken;          // 窓を移ったとき、古いループを止めるための札
   last = performance.now();
-  const step = (now) => {
+  const step = () => {
     if (mine !== loopToken) return;
-    const dt = Math.min(.05, (now - last) / 1000);
+
+    // 時間は必ず「このスクリプトを読み込んだ窓の時計」で測る。
+    // 小窓（PiP）は別ウィンドウで performance の原点がこちらと違うので、
+    // rAF が渡してくるタイムスタンプをそのまま使うと、小窓へ移った瞬間に
+    // dt が大きな負の値になる（＝音量の補間が発散してノイズが出る）。
+    // state.lastPet や cat.until もこの時計で記録しているので、混ぜないこと。
+    const now = performance.now();
+    const dt = Math.max(0, Math.min(.05, (now - last) / 1000));   // 負にしない
     last = now;
 
     if (state.playing){
@@ -25,7 +32,7 @@ function startLoop(){
     const recentlyPetted = (now - state.lastPet) < 500;
     const target = recentlyPetted ? 1 : 0;
     state.pet += (target - state.pet) * Math.min(1, dt * (recentlyPetted ? 5 : 1.4));
-    purrLevel = Math.max(0, purrLevel - dt * (recentlyPetted ? .12 : .45));
+    purrLevel = Math.min(1, Math.max(0, purrLevel - dt * (recentlyPetted ? .12 : .45)));
     if (recentlyPetted) purrLevel = Math.min(1, purrLevel + dt * .5);
 
     // どこか一箇所でつまずいてもループ自体は止めない

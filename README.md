@@ -49,6 +49,13 @@ ES モジュールにすると `file://` で開けなくなるので、あえて
 CSS も別ウィンドウには自動で付いてこないので、`pip.js` の `moveInto()` が
 `<style>` と `<link rel="stylesheet">` を複製している。
 
+もうひとつの落とし穴が**時計**。小窓は別ウィンドウなので `performance.timeOrigin` が
+こちらと違い、小窓側の `requestAnimationFrame` が渡してくるタイムスタンプは
+元の窓の `performance.now()` と噛み合わない。混ぜると小窓へ移った瞬間に
+`dt` が大きな負の値になり、音量の補間が発散して**ノイズが出る**。
+そのため `main.js` のループは rAF の引数を使わず、常に `performance.now()` で測っている。
+`state.lastPet` や `cat.until` もこの時計で記録しているので、時刻を扱うときは揃えること。
+
 ## 素材について
 
 天気データは [Open-Meteo](https://open-meteo.com/)（CC BY 4.0）。

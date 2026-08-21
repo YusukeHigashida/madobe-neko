@@ -306,16 +306,22 @@ $('soundBtn').addEventListener('click', () => {
   }
 });
 
+/* 音量を目標値へ近づける。
+   万一 dt が壊れても、音量は 0..max の外へ出さない（＝耳に痛いノイズを出さない）。
+   補間の係数も 0..1 に収める。 */
+function approachGain(param, target, max, k){
+  const step = Math.max(0, Math.min(1, k));
+  param.value = Math.max(0, Math.min(max, param.value + (target - param.value) * step));
+}
+
 function updateAudio(dt){
   if (!AC || !master) return;
-  const target = state.sound ? .9 : 0;
-  master.gain.value += (target - master.gain.value) * Math.min(1, dt * 3);
+  approachGain(master.gain, state.sound ? .9 : 0, .9, dt * 3);
   if (nodes.rain){
     const t = (state.weather === 'rain' ? .16 : state.weather === 'snow' ? .012 : 0);
-    nodes.rain.gain.value += (t - nodes.rain.gain.value) * Math.min(1, dt * 1.2);
+    approachGain(nodes.rain.gain, t, .16, dt * 1.2);
   }
   if (nodes.purr){
-    const t = purrLevel * .09;
-    nodes.purr.gain.value += (t - nodes.purr.gain.value) * Math.min(1, dt * 2.5);
+    approachGain(nodes.purr.gain, purrLevel * .09, .09, dt * 2.5);
   }
 }
